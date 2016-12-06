@@ -1,3 +1,5 @@
+module FiniteStateMachine where
+
 import Data.HashSet (HashSet)
 import Data.Hashable (Hashable)
 import qualified Data.HashSet as Set
@@ -48,12 +50,13 @@ applyNDFSM fsm str = any (flip Set.member (acceptedNDStates fsm)) allFinalStates
         appliedInitialEpsilon = untilStableEpsilons (Set.singleton $ startND fsm) (transitionND fsm)
         allFinalStates = foldl (\acc e->(acc `setBind` flip (transitionND fsm) (Just e)) `untilStableEpsilons` (transitionND fsm)) appliedInitialEpsilon str
 
+fsmToNDFSM :: (Hashable s, Eq s) => FSM s a -> NSFSM s a
 fsmToNDFSM (FSM (q, sigma, delta, q0, f)) = NDFSM (q, sigma, delta', q0, f) where 
         delta' state alpha = case alpha of
             (Just a) -> Set.singleton (delta state a)
             Nothing -> Set.empty
 
-            
+
 powerSet :: (Hashable a, Eq a) => HashSet a -> HashSet (HashSet a)
 powerSet mySet = Set.fromList $ map Set.fromList (powerSetList (Set.toList mySet))
 
@@ -71,23 +74,6 @@ Proof: To be proved.
 
 setBind :: (Hashable s1, Hashable s2, Eq s1, Eq s2) => HashSet s1 -> (s1 -> HashSet s2) -> HashSet s2
 setBind s f = foldl (Set.union) Set.empty $ Set.map f s
-    
-myAlphabet = Set.fromList [0,1] :: HashSet Int
-myStates = Set.fromList [1..3] :: HashSet Int
-delta (1, 0) = 2
-delta (1, 1) = 1
-delta (2, 0) = 3
-delta (2, 1) = 1
-delta (3, 0) = 3
-delta (3, 1) = 3
-myFSM = FSM (myStates, myAlphabet, curry delta, 1, Set.singleton 1)
-
-myStates2 = Set.fromList [1..2] :: HashSet Int
-delta2 (1, 0) = 1
-delta2 (2, 0) = 2
-delta2 (1, 1) = 2
-delta2 (2, 1) = 1
-myFSM2 = FSM (myStates2, myAlphabet, curry delta2, 1, Set.singleton 2)
 
 union::(Hashable s1, Hashable s2, Eq s1, Eq s2) => FSM s1 a -> FSM s2 a -> FSM (s1, s2) a
 union (FSM (q1, sigma1, delta1, q0, f1)) (FSM (q2, sigma2, delta2, q0', f2)) = FSM (cross q1 q2, sigma1, \(s1,s2)->(\a->(delta1 s1 a, delta2 s2 a)), (q0, q0'), Set.union (cross f1 q2) (cross q1 f2))
@@ -127,40 +113,6 @@ cross' a b = foldl Set.union Set.empty doubleSet
         disjointSum anElem s = Set.map (\a->(anElem, a)) s
         doubleSet = Set.map (flip disjointSum b) a
 -}
-
-myFSM3 = union myFSM myFSM2
-
-
-
-
-myNDAlphabet = Set.fromList [0,1] :: HashSet Int
-myNDStates = Set.fromList [1..5] :: HashSet Int
-
-nddelta :: Int -> Maybe Int -> HashSet Int
-nddelta 1 (Just 0) = Set.singleton 5
-nddelta 1 (Nothing) = Set.singleton 2
-nddelta 5 (Just 1) = Set.singleton 1
-nddelta 2 (Just 0) = Set.singleton 3
-nddelta 3 (Just 0) = Set.singleton 2
-nddelta 2 (Just 1) = Set.singleton 4
-nddelta 4 (Just 0) = Set.singleton 2
-nddelta _ _ = Set.empty
-
-myNDFSM = NDFSM (myNDStates, myNDAlphabet, nddelta, 1, Set.fromList [1, 2])
-
-
-myNDStates2 = Set.fromList [1..7] :: HashSet Int
-nddelta2 7 (Just 0) = Set.fromList [2,6]
-nddelta2 1 Nothing = Set.fromList [4,7]
-nddelta2 4 (Just 0) = Set.singleton 5
-nddelta2 5 (Just 0) = Set.singleton 4
-nddelta2 6 (Just 1) = Set.singleton 7
-nddelta2 2 (Just 0) = Set.singleton 3
-nddelta2 3 (Just 0) = Set.singleton 7
-nddelta2 _ _ = Set.empty
-
-myNDFSM2 = NDFSM (myNDStates2, myNDAlphabet, nddelta2, 1, Set.fromList [7, 4]) 
-
 
 
 
