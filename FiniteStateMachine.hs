@@ -5,6 +5,7 @@ import Data.Hashable (Hashable)
 import qualified Data.HashSet as Set
 import Data.Foldable (Foldable, foldl)
 import Prelude hiding (foldl)
+import SetTools
 
 --type State = Int
 newtype FSM state alphabet = FSM (HashSet state, HashSet alphabet, state->alphabet->state, state, HashSet state)
@@ -50,7 +51,7 @@ applyNDFSM fsm str = any (flip Set.member (acceptedNDStates fsm)) allFinalStates
         appliedInitialEpsilon = untilStableEpsilons (Set.singleton $ startND fsm) (transitionND fsm)
         allFinalStates = foldl (\acc e->(acc `setBind` flip (transitionND fsm) (Just e)) `untilStableEpsilons` (transitionND fsm)) appliedInitialEpsilon str
 
-fsmToNDFSM :: (Hashable s, Eq s) => FSM s a -> NSFSM s a
+fsmToNDFSM :: (Hashable s, Eq s) => FSM s a -> NDFSM s a
 fsmToNDFSM (FSM (q, sigma, delta, q0, f)) = NDFSM (q, sigma, delta', q0, f) where 
         delta' state alpha = case alpha of
             (Just a) -> Set.singleton (delta state a)
@@ -71,10 +72,6 @@ Theorem: Suppose we have an NDFSM m. If we construct m' by adding an epsilon tra
 
 Proof: To be proved.
 -}
-
-setBind :: (Hashable s1, Hashable s2, Eq s1, Eq s2) => HashSet s1 -> (s1 -> HashSet s2) -> HashSet s2
-setBind s f = foldl (Set.union) Set.empty $ Set.map f s
-
 union::(Hashable s1, Hashable s2, Eq s1, Eq s2) => FSM s1 a -> FSM s2 a -> FSM (s1, s2) a
 union (FSM (q1, sigma1, delta1, q0, f1)) (FSM (q2, sigma2, delta2, q0', f2)) = FSM (cross q1 q2, sigma1, \(s1,s2)->(\a->(delta1 s1 a, delta2 s2 a)), (q0, q0'), Set.union (cross f1 q2) (cross q1 f2))
 
@@ -113,8 +110,3 @@ cross' a b = foldl Set.union Set.empty doubleSet
         disjointSum anElem s = Set.map (\a->(anElem, a)) s
         doubleSet = Set.map (flip disjointSum b) a
 -}
-
-
-
-newtype PDA state alphabet stack = PDA (HashSet state, HashSet alphabet, HashSet stack, state->Maybe alphabet->stack->(state, [stack]), state, HashSet state)
-
