@@ -57,15 +57,6 @@ fsmToNDFSM (FSM (q, sigma, delta, q0, f)) = NDFSM (q, sigma, delta', q0, f) wher
             (Just a) -> Set.singleton (delta state a)
             Nothing -> Set.empty
 
-
-powerSet :: (Hashable a, Eq a) => HashSet a -> HashSet (HashSet a)
-powerSet mySet = Set.fromList $ map Set.fromList (powerSetList (Set.toList mySet))
-
-powerSetList :: [a] -> [[a]]
-powerSetList [] = [[]]
-powerSetList (x:xs) = tailSet ++ map (x:) tailSet
-    where tailSet = powerSetList xs
-
 {- 
 Theorem: Suppose we have an NDFSM m. If we construct m' by adding an epsilon transition that is a self-loop to every state,
     then the language described by m = the language described by m'
