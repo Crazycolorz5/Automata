@@ -10,6 +10,11 @@ newtype PDA state alphabet stack = PDA (HashSet state, HashSet alphabet, HashSet
 newtype CFGRule variable terminal = Rule (variable, [Either variable terminal])
 newtype CFG variable terminal = Grammar (HashSet variable, HashSet terminal, [CFGRule variable terminal], variable)
 data CNFRule variable terminal = CNFRule (variable, Either (variable, variable) terminal) | EmptyRule --EmptyRule represents the rule S -> epsilon
+    --Note that these a list of these rules does not imply that the language is in CNF.
+    --Namely, you can have rules to produce the start variable again.
+    --I could enforce this on the type level by introducing Maybe and having the start variable be forced to be Nothing,
+    --But not only is that constraining, it also breaks the definition of CNF CFG (as it'd just be a 3 tuple).
+    --However, it COULD BE DONE is what I'm arguing.
 newtype CNFCFG variable terminal = CNFGrammar (HashSet variable, HashSet terminal, [CNFRule variable terminal], variable)
 
 --pdaDelta (PDA (states, sigma, stackAlpha, delta, startState, finalStates)) = delta
@@ -74,6 +79,13 @@ pdaToCFG (PDA (states, sigma, stackAlpha, delta, startState, finalStates)) = Gra
         paths = [Rule (Just (i,j), [Left (Just (i,k)), Left (Just (j, k))]) | i <- statesList, j <- statesList, k <- statesList]
         identity = [Rule (Just (w,w), []) | w <- statesList]
 
+--Now, I must recreate the algorithm for turning a CFG to a CNFCFG
+--https://people.cs.clemson.edu/~goddard/texts/theoryOfComputation/9a.pdf source
+data CNFVariable variable terminal = NewVar Integer | OldVar variable | LiftedTerm terminal --Use Integer for arbitrary number of new variables.
+cfgToCNFCFG :: CFG variable terminal -> CNFCFG (CNFVariable variable terminal) terminal
+cfgToCNFCFG (CFG (vars, terms, rules, start)) = CNFCFG (newVars, terms, newRules, start) where
+    newVars = undefined
+    newRules = undefined
 
 --Okay, so I wanted to do running a PDA similar to how I did a FSA, but that doesn't quite work -- 
 --The epsilon transitions don't eventually stabilize, since we could have an epsilon transition self-loop that adds some number of things from the stack
