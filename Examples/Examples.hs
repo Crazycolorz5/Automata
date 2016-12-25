@@ -1,5 +1,5 @@
 import FiniteStateMachine as FSM
-
+import PushdownAutomata as PDA
 import Data.HashSet (HashSet)
 import qualified Data.HashSet as Set
 
@@ -50,3 +50,22 @@ nddelta2 3 (Just 0) = Set.singleton 7
 nddelta2 _ _ = Set.empty
 
 myNDFSM2 = NDFSM (myNDStates2, myNDAlphabet, nddelta2, 1, Set.fromList [7, 4]) 
+
+
+--PDA for a^nb^m | (a*) b^2n
+myPDAStates = Set.fromList [0..4] :: HashSet Int
+myPDAAlphabet = Set.fromList ['a', 'b'] :: HashSet Char
+myPDAStackAlphabet = Set.singleton 'a' :: HashSet Char
+pdaDelta 0 (Just 'a') Nothing = Set.singleton (0, Just 'a')
+pdaDelta 0 Nothing Nothing = Set.fromList [(1, Nothing), (3, Nothing)]
+pdaDelta 1 Nothing (Just 'a') = Set.singleton (1, Nothing)
+pdaDelta 1 (Just 'b') Nothing = Set.singleton (2, Nothing)
+pdaDelta 2 (Just 'b') Nothing = Set.singleton (1, Nothing)
+pdaDelta 3 (Just 'b') (Just 'a') = Set.singleton (3, Nothing)
+pdaDelta 3 Nothing Nothing = Set.singleton (4, Nothing)
+pdaDelta _ _ _ = Set.empty
+pdaFinalStates = Set.fromList [1, 4]
+
+myPDA = PDA (myPDAStates, myPDAAlphabet, myPDAStackAlphabet, pdaDelta, 0, pdaFinalStates)
+
+myCFG = pdaToCFG myPDA
