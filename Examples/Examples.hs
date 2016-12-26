@@ -67,5 +67,26 @@ pdaDelta _ _ _ = Set.empty
 pdaFinalStates = Set.fromList [1, 4]
 
 myPDA = PDA (myPDAStates, myPDAAlphabet, myPDAStackAlphabet, pdaDelta, 0, pdaFinalStates)
+myPDAAccepts = cnfcfgProduces (cfgToCNFCFG . pdaToCFG $ myPDA) 
 
-myCFG = pdaToCFG myPDA
+myPDAStates2 = Set.singleton 0 :: HashSet Int
+myPDAAlphabet2 = Set.fromList ['a', 'b'] :: HashSet Char
+myPDAStackAlphabet2 = Set.empty :: HashSet Char
+pdaDelta2 0 (Just 'a') Nothing = Set.singleton (0, Nothing)
+pdaDelta2 _ _ _ = Set.empty
+pdaFinalStates2 = Set.singleton 0
+myPDA2 = PDA (myPDAStates2, myPDAAlphabet2, myPDAStackAlphabet2, pdaDelta2, 0, pdaFinalStates2) --Should recognize a*
+aStar = cnfcfgProduces (cfgToCNFCFG . pdaToCFG $ myPDA2)
+
+
+--a^n b^n | a* b^2n CFG:
+-- S -> epsilon
+-- S -> N
+-- S -> M
+-- N -> a N b | epsilon
+-- M -> a M | M b b | epsilon
+myCFGVars = Set.fromList ['S', 'N', 'M']
+myCFGTerms = Set.fromList ['a', 'b']
+myCFGRules = Set.fromList [Rule ('S', []), Rule ('S', [Left 'N']), Rule ('S', [Left 'M']), Rule ('N', [Right 'a', Left 'N', Right 'b']), Rule ('N', []), Rule ('M', [Right 'a', Left 'M']), Rule ('M', [Left 'M', Right 'b', Right 'b']), Rule ('M', [])]
+myCFG = Grammar (myCFGVars, myCFGTerms, myCFGRules, 'S')
+myCNF = cfgToCNFCFG myCFG
