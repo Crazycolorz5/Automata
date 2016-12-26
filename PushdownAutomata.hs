@@ -1,5 +1,8 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DeriveGeneric #-}
 module PushdownAutomata where
 
+import GHC.Generics (Generic)
 import Data.HashSet (HashSet)
 import Data.Hashable (Hashable)
 import qualified Data.HashSet as Set
@@ -26,6 +29,12 @@ instance (Show variable, Show terminal) => Show (CFGRule variable terminal) wher
 
 instance (Show variable, Show terminal) => Show (CFG variable terminal) where
     show (Grammar (vars, terms, rules, start)) = "Variables: " ++ show vars ++ "\nTerminals: " ++ show terms ++ "\nRules:" ++ foldl (\acc e->acc ++ '\n':(show e)) "" rules ++ "\nStarting Variable: " ++ show start
+instance (Show variable, Show terminal) => Show (CNFRule variable terminal) where
+    show EmptyRule = "Start -> epsilon"
+    show (CNFRule (v, Left (v1, v2))) = show v ++ " -> " ++ show v1 ++ " " ++ show v2
+    show (CNFRule (v, Right t)) = show v ++ " -> " ++ show t
+instance (Show variable, Show terminal) => Show (CNFCFG variable terminal) where
+    show (CNFGrammar (vars, terms, rules, start)) = "Variables: " ++ show vars ++ "\nTerminals: " ++ show terms ++ "\nRules:" ++ foldl (\acc e->acc ++ '\n':(show e)) "" rules ++ "\nStarting Variable: " ++ show start
 
 --Okay, let's do it with the algorithm proposed but not covered in class, (A_pda)
 --Turn the PDA to a CNF Grammar, then I can predictably generate strings (and more importantly, prove termination).
@@ -81,11 +90,68 @@ pdaToCFG (PDA (states, sigma, stackAlpha, delta, startState, finalStates)) = Gra
 
 --Now, I must recreate the algorithm for turning a CFG to a CNFCFG
 --https://people.cs.clemson.edu/~goddard/texts/theoryOfComputation/9a.pdf source
-data CNFVariable variable terminal = NewVar Integer | OldVar variable | LiftedTerm terminal --Use Integer for arbitrary number of new variables.
-cfgToCNFCFG :: CFG variable terminal -> CNFCFG (CNFVariable variable terminal) terminal
-cfgToCNFCFG (CFG (vars, terms, rules, start)) = CNFCFG (newVars, terms, newRules, start) where
-    newVars = undefined
-    newRules = undefined
+data CNFVariable variable terminal = NewVar Integer | OldVar variable | LiftedTerm terminal deriving (Eq, Show, Generic) --Use Integer for arbitrary number of new variables.
+instance (Hashable variable, Hashable terminal) => Hashable (CNFVariable variable terminal)
+
+cfgToCNFCFG :: (Hashable variable, Eq variable, Show variable, Show terminal, Hashable terminal, Eq terminal) => CFG variable terminal -> CNFCFG (CNFVariable variable terminal) terminal
+cfgToCNFCFG (Grammar (vars, terms, rules, start)) = CNFGrammar (newVars, terms, newRules, OldVar start) where
+    nullableVariables = foldl (\acc (Rule (v, l)) -> if null l then Set.insert v acc else acc) Set.empty rules
+    {-
+    liftedRules :: [Either (CFGRule variable terminal) (CNFRule (CNFVariable variable terminal) terminal)]
+    liftedRules = map Left rules
+    -}
+    --Directly translate rules that already conform to CNF form
+    {-
+    translatedRules = flip map liftedRules $ \x -> case x of
+        Left (Rule (v, l)) -> case l of
+            (Left v1):(Left v2):[] -> Right (CNFRule (v, Left (v1, v2)))
+            (Right t):[] -> Right (CNFRule (v, Right t))
+            otherwise -> Left (Rule (v, l))
+        Right x -> x
+    -}
+    --Step 1 : Remove rules ending in epsilon.
+    eliminatedNullables = filter (\(Rule (v,l)) -> v /= start && not (null l)) $ do --Avoid eliminating S->epsilon afterwards.
+        Rule (v,l) <- rules --For every rule
+        map (\e -> Rule (v, e)) (expand l nullableVariables) where --Expand its rhs's expansion with respect to the nullable variables
+            expand [] wrt = [[]]
+            expand ((Left x):xs) wrt = let without = expand xs wrt in 
+                                           if x `elem` wrt 
+                                              then map (Left x:) without ++ without --Similar to programming for a powerset. But on branch if it's in the wrt list.
+                                              else map (Left x:) without
+            expand ((Right x):xs) wrt = map (Right x:) $ expand xs wrt
+    --Step 2: Eliminate variable-unit productions.
+    eliminatedVariableUnits = do
+        Rule (v, l) <- eliminatedNullables
+        case l of
+            ((Left x):[]) -> performSubstitution v [v] x where  --If the rule is a unit, sub it with all of the target's rules
+                performSubstitution var traversed current = let relevants = filter (\(Rule (v,l)) -> v == current) eliminatedNullables in do --This is done recursively along all unit productions.
+                    Rule (vin, lin) <- relevants
+                    case lin of
+                         ((Left x):[]) -> if x `elem` traversed then [] else performSubstitution var (current:traversed) x --However, if we've seen it before (in this expansion), no need to expand it.
+                         otherwise -> return $ Rule (var, lin)
+            otherwise -> return $ Rule (v, l)
+    --Step 3: Elimate long expressions by introducing new variables.
+    -- The difficulty lies in keeping track of unique variables to introduce.
+    (nUsed, eliminatedLongExpresssons) = foldl (\(i, accL)->(\(r@(Rule (v,l)))->if length l <= 2 
+                                                                          then (i, Rule (OldVar v, map (left OldVar) l):accL)
+                                                                          else let (iNext, lNext) = introduceNewVars i r in (iNext, lNext ++ accL))) (0, []) eliminatedVariableUnits where
+        introduceNewVars next (Rule (v, l)) = expandRules next (OldVar v) l
+        expandRules next vCur (l@(l1:ls))
+            | length l == 2 = (next, [Rule (vCur, map (left OldVar) l)])
+            | otherwise     = let (tailNext, rs) = expandRules (succ next) (NewVar next) ls in (tailNext,Rule (vCur, left OldVar l1:Left (NewVar next):[]):rs)
+
+    --Step 4: Lift all terminals.
+    eliminatedMixedTerminals = map (\term -> Rule (LiftedTerm term, [Right term])) (Set.toList terms) ++ map (\(Rule (v, l)) -> case l of --Rules for production of terminals, plus
+             ((Right term):[]) -> Rule (v, l) --If it's JUST a terminal, it can stay.
+             otherwise -> Rule (v, map (\x -> case x of Right term -> Left (LiftedTerm term); otherwise -> x) l)) eliminatedLongExpresssons
+    
+    --Now perform translation into CNF
+    newRules = flip map eliminatedMixedTerminals $ \(Rule (v, l)) -> case l of
+                                        [] -> case v of OldVar vOld -> if vOld == start then EmptyRule else error "Epsilon transition for non-start variable."; otherwise -> error "Epsilon transition for new variable."
+                                        ((Left v1):(Left v2):[]) -> CNFRule (v, Left (v1, v2))
+                                        ((Right t):[]) -> CNFRule (v, Right t)
+                                        otherwise -> error $ "Bad rule: " ++ show (Rule (v, l))
+    newVars = Set.fromList (take (fromIntegral nUsed) $ fmap NewVar [0..]) `Set.union` Set.map OldVar vars `Set.union` Set.map LiftedTerm terms
 
 --Okay, so I wanted to do running a PDA similar to how I did a FSA, but that doesn't quite work -- 
 --The epsilon transitions don't eventually stabilize, since we could have an epsilon transition self-loop that adds some number of things from the stack
