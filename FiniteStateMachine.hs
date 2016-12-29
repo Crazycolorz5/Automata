@@ -42,8 +42,8 @@ ndfsmToFSM (NDFSM (q, sigma, delta, q0, f)) = FSM (newQ, sigma, newDelta, newq0,
         newQ = powerSet q
         newq0 = untilStableEpsilons (Set.singleton $ q0) (delta)
         newDelta stateSet a = stateSet `setBind` flip delta (Just a) `untilStableEpsilons` (delta)
-        newf = Set.filter (not . null) $ Set.map (Set.intersection f) newQ -- set of all sets that contain an element of f.
-        -- take all states, intersect each with F, take the ones that are not empty.
+        newf = Set.filter (not . null . Set.intersection f) $ newQ -- set of all sets that contain an element of f.
+        -- take all state sets, take the ones whose intersections with f are not empty.
 
 applyNDFSM :: (Hashable s, Eq s, Foldable f) => NDFSM s a -> f a -> Bool
 applyNDFSM fsm str = any (flip Set.member (acceptedNDStates fsm)) allFinalStates
