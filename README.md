@@ -7,7 +7,7 @@ unordered-containers.
 
 FiniteStateMachine.hs implements both deterministic and non-deterministic finite state machines. It 
 then defines alorithms for converting between the two, and for a few language operations (such as 
-intersection, union, kleene start).
+intersection, union, kleene star).
 
 PushdownAutomata.hs implements pushdown automata, context free grammars, and Chomsky normal form 
 context free grammars (cnfcfg). The algorithm for checking if a PDA recognizes a string is converting 
