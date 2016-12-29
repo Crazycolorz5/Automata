@@ -35,6 +35,8 @@ instance (Show variable, Show terminal) => Show (CNFCFG variable terminal) where
 
 --Okay, let's do it with the algorithm proposed but not covered in class, (A_pda)
 --Turn the PDA to a CNF Grammar, then I can predictably generate strings (and more importantly, prove termination).
+pdaToCNFCFG :: (Hashable state, Hashable alphabet, Hashable stack, Eq state, Eq alphabet, Eq stack) => PDA state alphabet stack -> CNFCFG (CNFVariable (Maybe (state, state)) alphabet) alphabet
+pdaToCNFCFG = cfgToCNFCFG . pdaToCFG --Put this here, functions defined below.
 
 --Of course, the downside is that this algorithm runs in about (q^3)^l time... 
 --where q is the number of states in the PDA and l is the length of the string to recognize...
@@ -81,7 +83,7 @@ pdaToCFG (PDA (states, sigma, stackAlpha, delta, startState, finalStates)) = Gra
 data CNFVariable variable terminal = NewVar Integer | OldVar variable | LiftedTerm terminal deriving (Eq, Show, Generic) --Use Integer for arbitrary number of new variables.
 instance (Hashable variable, Hashable terminal) => Hashable (CNFVariable variable terminal)
 
-cfgToCNFCFG :: (Hashable variable, Eq variable, Show variable, Show terminal, Hashable terminal, Eq terminal) => CFG variable terminal -> CNFCFG (CNFVariable variable terminal) terminal
+cfgToCNFCFG :: (Hashable variable, Eq variable, Hashable terminal, Eq terminal) => CFG variable terminal -> CNFCFG (CNFVariable variable terminal) terminal
 cfgToCNFCFG (Grammar (vars, terms, rulesSet, start)) = CNFGrammar (newVars, terms, newRules, OldVar start) where
     rules = Set.toList rulesSet
     --Step 1 : Remove rules ending in epsilon.
@@ -129,7 +131,7 @@ cfgToCNFCFG (Grammar (vars, terms, rulesSet, start)) = CNFGrammar (newVars, term
                                         [] -> case v of OldVar vOld -> if vOld == start then EmptyRule else error "Epsilon transition for non-start variable."; otherwise -> error "Epsilon transition for new variable."
                                         ((Left v1):(Left v2):[]) -> CNFRule (v, Left (v1, v2))
                                         ((Right t):[]) -> CNFRule (v, Right t)
-                                        otherwise -> error $ "Bad rule: " ++ show (Rule (v, l))
+                                        otherwise -> error $ "Bad rule."
     newVars = Set.fromList (take (fromIntegral nUsed) $ fmap NewVar [0..]) `Set.union` Set.map OldVar vars `Set.union` Set.map LiftedTerm terms
 
     
